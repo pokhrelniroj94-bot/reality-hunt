@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { GameMode, UserProfile, PlayerSettings } from '../../types/game';
 import { audio } from '../../audio/HorrorAudioEngine';
 import {
@@ -95,7 +95,7 @@ export const MainMenuView: React.FC<MainMenuViewProps> = ({
               {profile.username}
             </div>
             <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
-              Hunts: {profile.totalHunts} • Badges: {profile.unlockedBadges.length}
+              Hunts: {profile.totalHunts} â€¢ Badges: {profile.unlockedBadges.length}
             </div>
           </div>
         </div>
@@ -266,7 +266,7 @@ export const MainMenuView: React.FC<MainMenuViewProps> = ({
             <div>
               <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>HUNT WITH FRIENDS</div>
               <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                2–4 Player Co-Op Investigation Lobby
+                2â€“4 Player Co-Op Investigation Lobby
               </div>
             </div>
           </div>
@@ -324,7 +324,22 @@ export const MainMenuView: React.FC<MainMenuViewProps> = ({
         margin: '16px auto 0 auto',
         lineHeight: 1.4
       }}>
-        ⚠️ Real-World Safety: Every supernatural event is explicitly fictional. Never approach dangerous areas, roads, or private property. Seated & indoor play supported.
+        âš ï¸ Real-World Safety: Every supernatural event is explicitly fictional. Never approach dangerous areas, roads, or private property. Seated & indoor play supported.
+      </div>
+
+      {/* Creator Credit */}
+      <div style={{
+        textAlign: 'center',
+        fontSize: '0.72rem',
+        color: '#64748b',
+        marginTop: '8px',
+        zIndex: 10,
+        letterSpacing: '0.08em'
+      }}>
+        Created by <span style={{ color: '#cbd5e1', fontWeight: 700 }}>Niroj Pokhrel</span>
+        <div style={{ fontSize: '0.62rem', marginTop: '4px' }}>
+          © 2026 Niroj Pokhrel. All Rights Reserved.
+        </div>
       </div>
 
       {/* Content Warning Modal */}
@@ -383,3 +398,4 @@ export const MainMenuView: React.FC<MainMenuViewProps> = ({
     </div>
   );
 };
+
