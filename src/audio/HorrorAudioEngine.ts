@@ -1,4 +1,4 @@
-import { PlayerSettings } from '../types/game';
+﻿import { PlayerSettings } from '../types/game';
 
 export class HorrorAudioEngine {
   private static instance: HorrorAudioEngine;
@@ -15,6 +15,7 @@ export class HorrorAudioEngine {
   private droneOsc2: OscillatorNode | null = null;
   private droneFilter: BiquadFilterNode | null = null;
   private lfo: OscillatorNode | null = null;
+  private lfoGain: GainNode | null = null;
 
   // Dynamic Heartbeat System
   private heartbeatTimer: number | null = null;
@@ -27,6 +28,7 @@ export class HorrorAudioEngine {
 
   // Geiger Counter System
   private geigerInterval: number | null = null;
+  private geigerRateMs: number | null = null;
 
   private isMuted: boolean = false;
   private settings: PlayerSettings | null = null;
@@ -78,7 +80,9 @@ export class HorrorAudioEngine {
 
   public resumeAudioContext(): void {
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      void this.ctx.resume().catch((error) => {
+        console.warn('Unable to resume audio context', error);
+      });
     }
   }
 
@@ -110,10 +114,10 @@ export class HorrorAudioEngine {
       // LFO for breathing filter modulation
       this.lfo = this.ctx.createOscillator();
       this.lfo.frequency.setValueAtTime(0.15, now); // Slow cycle
-      const lfoGain = this.ctx.createGain();
-      lfoGain.gain.setValueAtTime(45, now);
-      this.lfo.connect(lfoGain);
-      lfoGain.connect(this.droneFilter.frequency);
+      this.lfoGain = this.ctx.createGain();
+      this.lfoGain.gain.setValueAtTime(45, now);
+      this.lfo.connect(this.lfoGain);
+      this.lfoGain.connect(this.droneFilter.frequency);
 
       this.droneOsc1.connect(this.droneFilter);
       this.droneOsc2.connect(this.droneFilter);
@@ -136,8 +140,19 @@ export class HorrorAudioEngine {
       this.droneOsc2 = null;
     }
     if (this.lfo) {
-      try { this.lfo.stop(); this.lfo.disconnect(); } catch {}
+      try { this.lfo.stop(); } catch {}
+      try { this.lfo.disconnect(); } catch {}
       this.lfo = null;
+    }
+
+    if (this.lfoGain) {
+      try { this.lfoGain.disconnect(); } catch {}
+      this.lfoGain = null;
+    }
+
+    if (this.droneFilter) {
+      try { this.droneFilter.disconnect(); } catch {}
+      this.droneFilter = null;
     }
   }
 
@@ -236,20 +251,39 @@ export class HorrorAudioEngine {
 
   // Geiger Counter Crackle
   public setGeigerProximity(distanceFactor: number): void {
-    // distanceFactor: 0 (far) to 1.0 (on top of anomaly)
-    if (this.geigerInterval !== null) {
-      clearInterval(this.geigerInterval);
-      this.geigerInterval = null;
+    const safeDistance = Number.isFinite(distanceFactor)
+      ? Math.min(1, Math.max(0, distanceFactor))
+      : 0;
+
+    if (safeDistance <= 0.05) {
+      this.stopGeiger();
+      return;
     }
 
-    if (distanceFactor <= 0.05) return;
+    const rateMs = Math.max(45, Math.floor(350 * (1.05 - safeDistance)));
 
-    const rateMs = Math.max(45, Math.floor(350 * (1.05 - distanceFactor)));
+    // Avoid recreating the interval every game frame.
+    if (this.geigerInterval !== null && this.geigerRateMs === rateMs) {
+      return;
+    }
+
+    this.stopGeiger();
+
+    this.geigerRateMs = rateMs;
     this.geigerInterval = window.setInterval(() => {
       if (Math.random() < 0.65) {
         this.playGeigerClick();
       }
     }, rateMs);
+  }
+
+  public stopGeiger(): void {
+    if (this.geigerInterval !== null) {
+      clearInterval(this.geigerInterval);
+      this.geigerInterval = null;
+    }
+
+    this.geigerRateMs = null;
   }
 
   private playGeigerClick(): void {
@@ -404,15 +438,26 @@ export class HorrorAudioEngine {
   public dispose(): void {
     this.stopAmbientDrone();
     this.stopHeartbeatLoop();
-    if (this.geigerInterval !== null) {
-      clearInterval(this.geigerInterval);
-      this.geigerInterval = null;
-    }
-    if (this.ctx) {
-      this.ctx.close();
-      this.ctx = null;
+    this.stopGeiger();
+
+    const context = this.ctx;
+    this.ctx = null;
+
+    this.masterGain = null;
+    this.ambientGain = null;
+    this.sfxGain = null;
+    this.heartbeatGain = null;
+    this.staticNode = null;
+    this.staticGainNode = null;
+    this.settings = null;
+
+    if (context && context.state !== 'closed') {
+      void context.close().catch((error) => {
+        console.warn('Failed to close audio context', error);
+      });
     }
   }
 }
 
 export const audio = HorrorAudioEngine.getInstance();
+

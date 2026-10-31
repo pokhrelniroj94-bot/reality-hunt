@@ -53,6 +53,9 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
   // Gameplay state
   const [displayMode, setDisplayMode] = useState<ARDisplayMode>(settings.cameraOffMode ? 'SIMULATED_ROOM' : 'CAMERA_FEED');
   const [flashlightOn, setFlashlightOn] = useState(true);
+  const flashlightOnRef = useRef(true);
+  const batteryPercentRef = useRef(98);
+  const batteryElapsedRef = useRef(0);
   const [batteryPercent, setBatteryPercent] = useState(98);
   const [fearLevel, setFearLevel] = useState(0.05);
   const [entityDistance, setEntityDistance] = useState(8.5);
@@ -63,6 +66,7 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
   const startTimeRef = useRef<number>(Date.now());
   const fearSpikesRef = useRef<number>(0);
   const maxFearRef = useRef<number>(0.05);
+  const missionEndedRef = useRef<boolean>(false);
 
   // Initialize AR Session & 3D Objects
   useEffect(() => {
@@ -104,7 +108,7 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
         provider.update(delta);
 
         // Update Entity
-        const metrics = entityLogicRef.current.update(delta, flashlightOn);
+        const metrics = entityLogicRef.current.update(delta, flashlightOnRef.current);
         setFearLevel(metrics.fearLevel);
         setEntityDistance(metrics.distance);
 
@@ -121,8 +125,23 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
         );
 
         // Flashlight battery drain (1% every 30 sec)
-        if (flashlightOn && Math.random() < 0.005) {
-          setBatteryPercent((prev) => Math.max(5, prev - 1));
+        if (flashlightOnRef.current && batteryPercentRef.current > 0) {
+          batteryElapsedRef.current += delta;
+
+          if (batteryElapsedRef.current >= 30) {
+            const drainAmount = Math.floor(batteryElapsedRef.current / 30);
+            batteryElapsedRef.current %= 30;
+
+            const nextBattery = Math.max(0, batteryPercentRef.current - drainAmount);
+            batteryPercentRef.current = nextBattery;
+            setBatteryPercent(nextBattery);
+
+            if (nextBattery === 0) {
+              flashlightOnRef.current = false;
+              setFlashlightOn(false);
+              provider.setFlashlight(false);
+            }
+          }
         }
 
         // Check Ending Conditions
@@ -139,9 +158,15 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
     return () => {
       isDisposed = true;
       cancelAnimationFrame(animId);
+      audio.stopGeiger();
+      audio.setHeartbeatIntensity(0);
+
       if (providerRef.current) {
         providerRef.current.dispose();
+        providerRef.current = null;
       }
+
+      arManagerRef.current = null;
     };
   }, [displayMode]);
 
@@ -243,7 +268,10 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
   };
 
   const handleToggleFlashlight = () => {
-    const nextState = !flashlightOn;
+    if (!flashlightOnRef.current && batteryPercentRef.current <= 0) return;
+
+    const nextState = !flashlightOnRef.current;
+    flashlightOnRef.current = nextState;
     setFlashlightOn(nextState);
     if (providerRef.current) {
       providerRef.current.setFlashlight(nextState);
@@ -264,9 +292,9 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
 
       if (result.puzzleId === 'PUZZLE_FREQUENCY_87_4') {
         setCurrentObjective('Signal 87.4 MHz decoded! Now align the 3 Runic Ward rings on the floor.');
-        setActiveSubtitle('Dispatcher 7: Frequency decoded! The ward is destabilizing—align the rings!');
+        setActiveSubtitle('Dispatcher 7: Frequency decoded! The ward is destabilizingâ€”align the rings!');
       } else if (result.puzzleId === 'PUZZLE_WARD_CIPHER') {
-        setCurrentObjective('Ward rings locked! Prepare for the Visitor’s collapse.');
+        setCurrentObjective('Ward rings locked! Prepare for the Visitorâ€™s collapse.');
         entityLogicRef.current.banish();
         setTimeout(() => triggerEnding('ENDING_SEAL'), 2000);
       } else if (result.puzzleId === 'PUZZLE_ECHO_SEQUENCE') {
@@ -284,6 +312,9 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
   };
 
   const triggerEnding = (endingId: string) => {
+    if (missionEndedRef.current) return;
+    missionEndedRef.current = true;
+
     const timeTaken = Math.round((Date.now() - startTimeRef.current) / 1000);
     const foundCount = clues.filter((c) => c.found).length;
 
@@ -403,3 +434,5 @@ export const ARInvestigationView: React.FC<ARInvestigationViewProps> = ({
     </div>
   );
 };
+
+
